@@ -942,8 +942,38 @@ function selWD(i){
 }
 function openEditSched(id){
   const s=(DB.schedules||[]).find(x=>x.id===id);if(!s)return;
-  S.mtype='edit-sched';S.mcur=id;S.stype=s.type;_selWD=s.weeklyDay!=null?s.weeklyDay:null;
-  openM('edit-sched',s.type);
+  const acc=ACCS[S.acct];
+  // S 상태 설정
+  S.mtype='edit-sched';S.mcur=id;S.stype=s.type;
+  _selWD=s.weeklyDay!=null?s.weeklyDay:null;
+  const isW=s.weeklyDay!=null;
+  const DAYS=['일','월','화','수','목','금','토'];
+  // 타입 버튼
+  const tB=Object.entries(CATS).map(([k,c])=>{
+    const on=k===s.type;
+    return'<button class="tbtn2'+(on?' on':'')+'" id="tt-'+k+'" style="'+(on?'background:'+c.color+';border-color:'+c.color:'')+'" onclick="selT(\''+k+'\')">'+c.icon+' '+c.label+'</button>';
+  }).join('');
+  // 매월/매주 토글
+  const monthBtnStyle='border:1px solid '+(isW?'#253545':'#c9a84c')+';background:'+(isW?'transparent':'#c9a84c33')+';color:'+(isW?'#607080':'#c9a84c');
+  const weekBtnStyle='border:1px solid '+(isW?'#5aab8e':'#253545')+';background:'+(isW?'#5aab8e33':'transparent')+';color:'+(isW?'#5aab8e':'#607080');
+  const dayInput='<div id="sched-monthly-inp" style="display:'+(isW?'none':'block')+'"><label class="flbl">매월 며칠 (말일=31) *</label><input class="finp" type="number" id="f-day" min="1" max="31" value="'+(s.dayOfMonth||'')+'" placeholder="25"/></div>';
+  const wdBtns=DAYS.map((d,i)=>'<button id="wd-'+i+'" onclick="selWD('+i+')" style="flex:1;min-width:36px;padding:6px 4px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid '+(isW&&s.weeklyDay===i?'#5aab8e':'#253545')+';background:'+(isW&&s.weeklyDay===i?'#5aab8e':'transparent')+';color:'+(isW&&s.weeklyDay===i?'#fff':'#607080')+'">'+d+'</button>').join('');
+  const weekInput='<div id="sched-weekly-inp" style="display:'+(isW?'block':'none')+'"><label class="flbl">매주 무슨 요일? *</label><div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:11px">'+wdBtns+'</div></div>';
+
+  document.getElementById('mtitle').innerHTML='✏️ 정기 일정 수정 <span style="color:'+acc.color+';font-size:12px">'+acc.emoji+'</span>';
+  document.getElementById('mbody').innerHTML=
+    '<div class="flbl">종류</div><div class="tbtns">'+tB+'</div>'+
+    '<div style="display:flex;gap:6px;margin-bottom:10px">'+
+      '<button id="sched-monthly" onclick="schedMode(\'monthly\')" style="flex:1;padding:7px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;'+monthBtnStyle+'">📅 매월</button>'+
+      '<button id="sched-weekly" onclick="schedMode(\'weekly\')" style="flex:1;padding:7px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;'+weekBtnStyle+'">🔁 매주</button>'+
+    '</div>'+
+    dayInput+weekInput+
+    '<label class="flbl">항목명 *</label><input class="finp" id="f-label" value="'+s.label+'" placeholder="항목명"/>'+
+    '<label class="flbl">금액 (원) *</label><input class="finp" type="number" id="f-amount" value="'+s.amount+'" placeholder="0"/>'+
+    '<label class="flbl">메모</label><input class="finp" id="f-memo" value="'+(s.memo||'')+'" placeholder="메모…"/>'+
+    '<div class="macts"><button class="msave" style="background:'+acc.color+'" onclick="saveM()">저장</button><button class="mcancel" onclick="closeM()">취소</button></div>';
+  document.getElementById('modal-bg').classList.add('open');
+  setTimeout(()=>{try{document.getElementById('f-label').focus();}catch(e){}},100);
 }
 
 function selT(k){

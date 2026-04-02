@@ -170,7 +170,16 @@ button,input,textarea{font-family:inherit}
 <div id="toasts"></div>
 
 <script>
-// ═══ 상수 ═══════════════════════════════════════════════════════════════════
+window.onerror = function(msg, src, line, col, err) {
+  document.getElementById('main').innerHTML =
+    '<div style="padding:16px;background:#1a0808;border:1px solid #e07b54;border-radius:8px;margin:14px;font-size:12px">' +
+    '<b style="color:#e07b54">🔴 JS 오류 (' + line + '행):</b><br>' +
+    '<span style="color:#ffaa88">' + msg + '</span><br>' +
+    '<span style="color:#607080">' + src + '</span>' +
+    '</div>';
+  return false;
+};
+</script>
 const ACCS={
   kim:{id:'kim',name:'김석은',emoji:'🧑',color:'#4f7cac',weeklyAllowance:{amount:30000,label:'주간 용돈'}},
   park:{id:'park',name:'박지예',emoji:'👩',color:'#c9748a',incomes:[{day:15,label:'근로소득'}]},

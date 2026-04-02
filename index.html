@@ -329,8 +329,8 @@ function renderMemos(){
       '<div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">'+
       '<div class="memotime">'+ts2s(m.ts)+(m.edited?' ✏️':'')+'</div>'+
       '<div style="display:flex;gap:8px">'+
-      '<button onclick="startMemoEdit(''+m.id+'')" style="background:none;border:none;color:#4f7cac;font-size:11px;cursor:pointer">수정</button>'+
-      '<button onclick="delMemo(''+m.id+'')" style="background:none;border:none;color:#304050;font-size:11px;cursor:pointer">삭제</button>'+
+      '<button onclick="startMemoEdit(\''+m.id+'\')" style="background:none;border:none;color:#4f7cac;font-size:11px;cursor:pointer">수정</button>'+
+      '<button onclick="delMemo(\''+m.id+'\')" style="background:none;border:none;color:#304050;font-size:11px;cursor:pointer">삭제</button>'+
       '</div></div></div>';
   }).join('');
   list.scrollTop=list.scrollHeight;

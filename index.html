@@ -549,7 +549,8 @@ function rDash({acc,mk,aTxs,inc,exp,dbt,sav,bal,carry}){
       '<div style="font-size:12px;color:#607080;margin-top:6px;border-top:1px solid #1e3045;padding-top:6px">'+
       (ob>0?'<div style="display:flex;justify-content:space-between;padding:2px 0"><span>🏁 초기잔액</span><span>+'+fmt(ob)+'원</span></div>':'')+
       (regInc>0?'<div style="display:flex;justify-content:space-between;padding:2px 0"><span>이달 수입</span><span style="color:#5aab8e">+'+fmt(regInc)+'원</span></div>':'')+
-      '<div style="display:flex;justify-content:space-between;padding:3px 0;border-top:1px solid #1e3045;margin-top:3px"><span style="color:#c8dff2">고정 후 가용</span><span style="color:'+(free>0?'#c9a84c':'#e07b54')+';font-weight:600">'+fmt(free)+'원</span></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:3px 0;border-top:1px solid #1e3045;margin-top:3px"><span style="color:#c8dff2">고정 예상 후 가용</span><span style="color:'+(free>0?'#c9a84c':'#e07b54')+';font-weight:600">'+fmt(free)+'원</span></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:3px 0"><span style="color:#c8dff2;font-weight:700">📊 실제 잔액</span><span style="color:'+(bal>=0?'#4f9bc9':'#e07b54')+';font-weight:700;font-size:14px">'+fmt(bal)+'원</span></div>'+
       '</div></div>'+
       '<div class="sec" style="border-color:#e07b5444"><div class="sechdr"><div class="sectitle" style="color:#e07b54">📤 이달 고정 지출</div></div>'+
       '<div style="font-size:22px;font-weight:700;color:#e07b54">'+fmt(totF)+'원</div>'+
@@ -843,7 +844,9 @@ function goMonth(y,m){S.vy=y;S.vm=m;S.tab='dashboard';render();}
 <script>
 // ═══ 모달 ═════════════════════════════════════════════════════════════════════
 function openM(type,initType){
-  S.mtype=type;S.stype=initType||'expense';S.mcur=null;
+  S.mtype=type;S.stype=initType||'expense';
+  // edit-sched/edit-debt는 S.mcur를 유지 (openEditSched에서 이미 설정됨)
+  if(type!=='edit-sched'&&type!=='edit-debt') S.mcur=null;
   const acc=ACCS[S.acct],mk=mkey(S.vy,S.vm);
   document.getElementById('mtitle').innerHTML=(type==='add-tx'?'내역 추가':type==='add-sched'?'정기 일정 추가':'수정')+' <span style="color:'+acc.color+';font-size:12px">'+acc.emoji+'</span>';
   const tB=Object.entries(CATS).map(([k,c])=>{

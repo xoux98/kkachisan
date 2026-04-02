@@ -590,16 +590,27 @@ function rDash({acc,mk,aTxs,inc,exp,dbt,sav,bal,carry}){
     if(ds||ls)h+=Hsec('부채·빌린돈 잔액',ds+ls,Hbtn('상세 →','#9b6bb5',"swT('debtloan')"));
 
   } else {
-    // 개인 수입/지출 요약
+    // 개인 수입/지출 요약 + 고정 지출
+    const pSched=(DB.schedules||[]).filter(s=>s.accountId===S.acct&&s.active);
+    const pSchedExp=pSched.filter(s=>s.type==='expense').reduce((a,s)=>a+Number(s.amount),0);
+    const pSchedDbt=pSched.filter(s=>s.type==='debt').reduce((a,s)=>a+Number(s.amount),0);
+    const pSchedSav=pSched.filter(s=>s.type==='saving').reduce((a,s)=>a+Number(s.amount),0);
+    const pTotFixed=pSchedExp+pSchedDbt+pSchedSav;
+    const pFree=Math.max(0,inc-pTotFixed);
     h+='<div class="col2">'+
       '<div class="sec" style="border-color:#5aab8e44"><div class="sechdr"><div class="sectitle" style="color:#5aab8e">📥 이달 수입</div></div>'+
       '<div style="font-size:22px;font-weight:700;color:#5aab8e">'+fmt(inc)+'원</div>'+
-      '<div style="font-size:12px;color:#607080;margin-top:6px;border-top:1px solid #1e3045;padding-top:6px"><div style="display:flex;justify-content:space-between"><span>잔액</span><span style="color:'+(bal>=0?'#4f9bc9':'#e07b54')+';font-weight:600">'+fmt(bal)+'원</span></div></div></div>'+
-      '<div class="sec" style="border-color:#e07b5444"><div class="sechdr"><div class="sectitle" style="color:#e07b54">📤 이달 지출</div></div>'+
-      '<div style="font-size:22px;font-weight:700;color:#e07b54">'+fmt(exp)+'원</div>'+
       '<div style="font-size:12px;color:#607080;margin-top:6px;border-top:1px solid #1e3045;padding-top:6px">'+
-      '<div style="display:flex;justify-content:space-between"><span>부채</span><span style="color:#9b6bb5">'+fmt(dbt)+'원</span></div>'+
-      '<div style="display:flex;justify-content:space-between"><span>저축</span><span style="color:#4f9bc9">'+fmt(sav)+'원</span></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>고정 후 가용</span><span style="color:'+(pFree>0?'#c9a84c':'#e07b54')+';font-weight:600">'+fmt(pFree)+'원</span></div>'+
+      '<div style="display:flex;justify-content:space-between;padding:2px 0"><span>잔액</span><span style="color:'+(bal>=0?'#4f9bc9':'#e07b54')+';font-weight:600">'+fmt(bal)+'원</span></div>'+
+      '</div></div>'+
+      '<div class="sec" style="border-color:#e07b5444"><div class="sechdr"><div class="sectitle" style="color:#e07b54">📤 이달 고정 지출</div></div>'+
+      '<div style="font-size:22px;font-weight:700;color:#e07b54">'+fmt(pTotFixed)+'원</div>'+
+      '<div style="font-size:12px;color:#607080;margin-top:6px;border-top:1px solid #1e3045;padding-top:6px">'+
+      (pSchedExp>0?'<div style="display:flex;justify-content:space-between;padding:2px 0"><span>생활비·관리비</span><span style="color:#e07b54">'+fmt(pSchedExp)+'원</span></div>':'')+
+      (pSchedDbt>0?'<div style="display:flex;justify-content:space-between;padding:2px 0"><span>부채·상환</span><span style="color:#9b6bb5">'+fmt(pSchedDbt)+'원</span></div>':'')+
+      (pSchedSav>0?'<div style="display:flex;justify-content:space-between;padding:2px 0"><span>저축 목표</span><span style="color:#4f9bc9">'+fmt(pSchedSav)+'원</span></div>':'')+
+      (pTotFixed===0?'<div style="color:#405060;font-size:11px">정기 일정 없음<br><span style="color:#4f7cac;cursor:pointer" onclick="swT(\'schedule\')">+ 정기 일정 추가 →</span></div>':'')+
       '</div></div></div>';
 
     // 주간 소비 분석 (현재 달만)
@@ -607,7 +618,7 @@ function rDash({acc,mk,aTxs,inc,exp,dbt,sav,bal,carry}){
       const wkS=new Date(ty,tm,td-now.getDay());
       const wkStr=ty+'-'+pad(tm+1)+'-'+pad(wkS.getDate());
       const wkExp=aTxs.filter(t=>t.type==='expense'&&(t.date||'')>=wkStr).reduce((a,b)=>a+Number(b.amount),0);
-      const pF=(DB.schedules||[]).filter(s=>s.accountId===S.acct&&s.active).reduce((a,s)=>a+Number(s.amount),0);
+      const pF=pTotFixed;
       const freeP=Math.max(0,inc-pF-50000);
       const wRec=Math.floor(freeP/4);
       const pct=wRec>0?Math.min(100,Math.round(wkExp/wRec*100)):wkExp>0?100:0;

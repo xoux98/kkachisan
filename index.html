@@ -922,6 +922,7 @@ function openEditSched(id){
   openM('edit-sched',s.type);
 }
 
+function selT(k){
   S.stype=k;
   document.querySelectorAll('.tbtn2').forEach(b=>{const id=b.id.replace('tt-','');const on=id===k;b.classList.toggle('on',on);b.style.background=on?CATS[k].color:'transparent';b.style.borderColor=on?CATS[k].color:'#253545';b.style.color=on?'#fff':'#607080';});
   try{document.getElementById('msave-btn').style.background=CATS[k].color;}catch(e){}

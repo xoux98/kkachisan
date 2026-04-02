@@ -1082,7 +1082,15 @@ function addAllowance(){
   DB.transactions.push({id:'t'+Date.now(),accountId:'kim',type:'income',amount:30000,label:'주간 용돈 (일요일)',date:ds,memo:'매주 일요일 용돈',isWeeklyAllowance:true});
   saveDB();toast('✓ 주간 용돈 30,000원 입력!','#4f7cac');render();
 }
-function delTx(id){DB.transactions=(DB.transactions||[]).filter(t=>t.id!==id);saveDB();toast('삭제됨');render();}
+function delTx(id){
+  DB.transactions=(DB.transactions||[]).filter(t=>t.id!==id);
+  // Firebase 즉시 반영 (경쟁 조건 방지)
+  if(isFB&&fbRef){
+    fbRef.set(DB).then(()=>setSS(true,'실시간 동기화 중 🟢')).catch(()=>setSS(false,'저장 실패'));
+  }
+  try{localStorage.setItem('kkachisan',JSON.stringify(DB));}catch(e){}
+  toast('✅ 삭제됨');render();
+}
 function delSched(id){DB.schedules=(DB.schedules||[]).map(s=>s.id===id?{...s,active:false}:s);saveDB();toast('삭제됨');render();}
 function disAl(id){S.dis.push(id);render();}
 function swA(id){S.acct=id;if(S.tab==='income'&&id==='couple')S.tab='dashboard';render();}

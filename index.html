@@ -214,6 +214,8 @@ function ld(y,m){return new Date(y,m+1,0).getDate();}
 function mkey(y,m){return y+'-'+pad(m+1);}
 function isCur(){return S.vy===ty&&S.vm===tm;}
 function getDU(d){if(d===99)d=ld(ty,tm);const r=d-td;return r<0?r+ld(ty,tm):r;}
+function getWeeklyDU(wd){let r=(wd-now.getDay()+7)%7;return r;}
+
 function wrem(){return Math.max(1,Math.ceil((ld(ty,tm)-td+1)/7));}
 function sum(arr,t){return arr.filter(x=>x.type===t).reduce((a,b)=>a+Number(b.amount),0);}
 function ts2s(ts){const d=new Date(ts);return(d.getMonth()+1)+'/'+d.getDate()+' '+pad(d.getHours())+':'+pad(d.getMinutes());}
@@ -411,8 +413,10 @@ function getAlerts(){
   if(!isCur())return[];
   const mk=mkey(ty,tm);
   return(DB.schedules||[]).filter(s=>s.active&&s.accountId===S.acct).map(s=>{
-    const day=s.dayOfMonth===99?ld(ty,tm):s.dayOfMonth;
-    return{...s,day,du:getDU(s.dayOfMonth),acc:ACCS[s.accountId]};
+    const isWeekly=s.weeklyDay!=null;
+    const day=isWeekly?null:(s.dayOfMonth===99?ld(ty,tm):s.dayOfMonth);
+    const du=isWeekly?getWeeklyDU(s.weeklyDay):getDU(s.dayOfMonth);
+    return{...s,day,du,acc:ACCS[s.accountId],isWeekly};
   }).filter(s=>{
     if(s.du<0||s.du>3)return false;
     if(S.dis.includes(s.id))return false;
@@ -718,16 +722,23 @@ function rSched({acc,mk,aTxs:_,inc:__}){
   ['income','expense','debt','saving'].forEach(type=>{
     const items=aSched.filter(s=>s.type===type);if(!items.length)return;
     h+=Hsec('<span style="color:'+CATS[type].color+'">'+CATS[type].icon+' '+CATS[type].label+'</span>',
-      items.slice().sort((a,b)=>a.dayOfMonth-b.dayOfMonth).map(s=>{
-        const day=s.dayOfMonth===99?ld(S.vy,S.vm):s.dayOfMonth;
+      items.slice().sort((a,b)=>(a.dayOfMonth||0)-(b.dayOfMonth||0)||(a.weeklyDay||0)-(b.weeklyDay||0)).map(s=>{
+        const DAYS=['일','월','화','수','목','금','토'];
+        const isWeekly=s.weeklyDay!=null;
+        const day=isWeekly?null:(s.dayOfMonth===99?ld(S.vy,S.vm):s.dayOfMonth);
         const done=(DB.transactions||[]).some(t=>t.fromSched===s.id&&t.date&&t.date.startsWith(mk));
-        const du=isCur()?getDU(s.dayOfMonth):-1;
+        const du=isCur()?(isWeekly?getWeeklyDU(s.weeklyDay):getDU(s.dayOfMonth)):-1;
         return'<div class="txrow" style="opacity:'+(done?0.55:1)+'">'+
-          '<div style="width:32px;text-align:center"><div style="color:'+CATS[type].color+';font-weight:700;font-size:15px">'+day+'</div><div style="color:#607080;font-size:10px">일</div></div>'+
+          '<div style="width:42px;text-align:center">'+
+            (isWeekly
+              ?'<div style="color:'+CATS[type].color+';font-weight:700;font-size:13px">'+DAYS[s.weeklyDay]+'</div><div style="color:#607080;font-size:10px">매주</div>'
+              :'<div style="color:'+CATS[type].color+';font-weight:700;font-size:15px">'+day+'</div><div style="color:#607080;font-size:10px">일</div>')+
+          '</div>'+
           '<div style="flex:1"><div class="txlbl">'+s.label+(s.isEst?'<span style="color:#c9a84c;font-size:10px;margin-left:4px">~추정</span>':'')+'</div>'+
-          '<div class="txmeta">'+(done?'<span style="color:#5aab8e">✓처리됨</span>':isCur()?(du===0?'<span style="color:#e07b54">🔴오늘</span>':du<=3?'<span style="color:#c9a84c">⚡D-'+du+'</span>':'예정'):'')+(s.memo?' · '+s.memo:'')+'</div></div>'+
+          '<div class="txmeta">'+(done?'<span style="color:#5aab8e">✓처리됨</span>':isCur()?(du===0?'<span style="color:#e07b54">🔴오늘</span>':du>=0&&du<=3?'<span style="color:#c9a84c">⚡D-'+du+'</span>':'예정'):'')+(s.memo?' · '+s.memo:'')+'</div></div>'+
           '<div class="txamt" style="color:'+CATS[type].color+'">'+fmt(s.amount)+'원</div>'+
           (!done&&isCur()?'<button class="aact" style="border-color:'+CATS[type].color+';color:'+CATS[type].color+'" onclick="recSched(\''+s.id+'\')">처리</button>':'')+
+          '<button class="delbtn" style="color:#4f7cac;font-size:12px" onclick="openEditSched(\''+s.id+'\')">수정</button>'+
           (!s.id.startsWith('cs')?'<button class="delbtn" onclick="delSched(\''+s.id+'\')">✕</button>':'')+
         '</div>';
       }).join(''));
@@ -819,7 +830,34 @@ function openM(type,initType){
     return'<button class="tbtn2'+(on?' on':'')+'" id="tt-'+k+'" style="'+(on?'background:'+c.color+';border-color:'+c.color:'')+'" onclick="selT(\''+k+'\')">'+c.icon+' '+c.label+'</button>';
   }).join('');
   let b='<div class="flbl">종류</div><div class="tbtns">'+tB+'</div>';
-  if(type==='add-sched')b+='<label class="flbl">매월 며칠 (말일=31) *</label><input class="finp" type="number" id="f-day" min="1" max="31" placeholder="25"/>';
+  if(type==='add-sched'||type==='edit-sched'){
+    const isEdit=type==='edit-sched';
+    const es=isEdit?(DB.schedules||[]).find(x=>x.id===S.mcur):null;
+    const isW=es?!!es.weeklyDay&&es.weeklyDay>=0:false;
+    b+='<div style="display:flex;gap:6px;margin-bottom:10px">'+
+      '<button id="sched-monthly" onclick="schedMode(\'monthly\')" style="flex:1;padding:7px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid '+(isW?'#253545':'#c9a84c')+';background:'+(isW?'transparent':'#c9a84c33')+';color:'+(isW?'#607080':'#c9a84c')+'">📅 매월</button>'+
+      '<button id="sched-weekly" onclick="schedMode(\'weekly\')" style="flex:1;padding:7px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:1px solid '+(isW?'#5aab8e':'#253545')+';background:'+(isW?'#5aab8e33':'transparent')+';color:'+(isW?'#5aab8e':'#607080')+'">🔁 매주</button>'+
+    '</div>'+
+    '<div id="sched-monthly-inp" style="display:'+(isW?'none':'block')+'">'+
+      '<label class="flbl">매월 며칠 (말일=31) *</label>'+
+      '<input class="finp" type="number" id="f-day" min="1" max="31" placeholder="25" value="'+(es&&!isW?es.dayOfMonth||'':'')+'" />'+
+    '</div>'+
+    '<div id="sched-weekly-inp" style="display:'+(isW?'block':'none')+'">'+
+      '<label class="flbl">매주 무슨 요일? *</label>'+
+      '<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:11px">'+
+      ['일','월','화','수','목','금','토'].map((d,i)=>'<button id="wd-'+i+'" onclick="selWD('+i+')" style="flex:1;min-width:36px;padding:6px 4px;border-radius:8px;font-size:13px;cursor:pointer;border:1px solid #253545;background:'+(es&&isW&&es.weeklyDay===i?'#5aab8e':'transparent')+';color:'+(es&&isW&&es.weeklyDay===i?'#fff':'#607080')+'">'+d+'</button>').join('')+
+      '</div>'+
+    '</div>';
+    if(isEdit){
+      b+='<label class="flbl">항목명 *</label><input class="finp" id="f-label" value="'+(es?es.label:'')+'" placeholder="예: 월세, 급여…"/>'+
+        '<label class="flbl">금액 (원) *</label><input class="finp" type="number" id="f-amount" value="'+(es?es.amount:'')+'" placeholder="0"/>'+
+        '<label class="flbl">메모</label><input class="finp" id="f-memo" value="'+(es?es.memo||'':'')+'" placeholder="메모…"/>'+
+        '<div class="macts"><button class="msave" id="msave-btn" style="background:'+acc.color+'" onclick="saveM()">저장</button><button class="mcancel" onclick="closeM()">취소</button></div>';
+      document.getElementById('mbody').innerHTML=b;
+      document.getElementById('modal-bg').classList.add('open');
+      return;
+    }
+  }
   if(type==='add-tx')b+='<label class="flbl">날짜</label><input class="finp" type="date" id="f-date" value="'+mk+'-'+pad(td)+'"/>';
   b+='<label class="flbl">항목명 *</label><input class="finp" id="f-label" placeholder="예: 월세, 급여…"/>'+
     '<label class="flbl">금액 (원) *</label><input class="finp" type="number" id="f-amount" placeholder="0"/>'+
@@ -859,7 +897,31 @@ function openSettings(){
     '<div style="font-size:11px;color:#405060;margin-top:5px;text-align:center">정기일정·벌금·빌린돈 잔액은 유지됩니다</div></div>';
   S.mtype='settings';document.getElementById('modal-bg').classList.add('open');
 }
-function selT(k){
+function schedMode(m){
+  const isW=m==='weekly';
+  const mb=document.getElementById('sched-monthly-inp');
+  const wb=document.getElementById('sched-weekly-inp');
+  if(mb)mb.style.display=isW?'none':'block';
+  if(wb)wb.style.display=isW?'block':'none';
+  const mb2=document.getElementById('sched-monthly');
+  const wb2=document.getElementById('sched-weekly');
+  if(mb2){mb2.style.borderColor=isW?'#253545':'#c9a84c';mb2.style.background=isW?'transparent':'#c9a84c33';mb2.style.color=isW?'#607080':'#c9a84c';}
+  if(wb2){wb2.style.borderColor=isW?'#5aab8e':'#253545';wb2.style.background=isW?'#5aab8e33':'transparent';wb2.style.color=isW?'#5aab8e':'#607080';}
+}
+let _selWD=null;
+function selWD(i){
+  _selWD=i;
+  ['일','월','화','수','목','금','토'].forEach((_,j)=>{
+    const b=document.getElementById('wd-'+j);
+    if(b){b.style.background=j===i?'#5aab8e':'transparent';b.style.borderColor=j===i?'#5aab8e':'#253545';b.style.color=j===i?'#fff':'#607080';}
+  });
+}
+function openEditSched(id){
+  const s=(DB.schedules||[]).find(x=>x.id===id);if(!s)return;
+  S.mtype='edit-sched';S.mcur=id;S.stype=s.type;_selWD=s.weeklyDay!=null?s.weeklyDay:null;
+  openM('edit-sched',s.type);
+}
+
   S.stype=k;
   document.querySelectorAll('.tbtn2').forEach(b=>{const id=b.id.replace('tt-','');const on=id===k;b.classList.toggle('on',on);b.style.background=on?CATS[k].color:'transparent';b.style.borderColor=on?CATS[k].color:'#253545';b.style.color=on?'#fff':'#607080';});
   try{document.getElementById('msave-btn').style.background=CATS[k].color;}catch(e){}
@@ -883,11 +945,30 @@ function saveM(){
     const memo=(document.getElementById('f-memo')||{}).value||'';
     DB.transactions.push({id:'t'+Date.now(),accountId:S.acct,type:S.stype,amount,label,date,memo});
     saveDB();closeM();toast('✓ 내역 추가',CATS[S.stype].color);
-  } else {
-    const dayV=Number((document.getElementById('f-day')||{}).value||0);
-    if(!dayV||dayV<1||dayV>31){toast('날짜를 1~31로 입력','#e07b54');return;}
+  } else if(S.mtype==='edit-sched'){
+    const s=(DB.schedules||[]).find(x=>x.id===S.mcur);if(!s)return;
+    const isW=document.getElementById('sched-weekly-inp')&&document.getElementById('sched-weekly-inp').style.display!=='none';
+    s.label=label;s.amount=amount;s.memo=(document.getElementById('f-memo')||{}).value||'';s.type=S.stype;
+    if(isW){
+      if(_selWD==null){toast('요일을 선택해주세요','#e07b54');return;}
+      s.weeklyDay=_selWD;delete s.dayOfMonth;
+    } else {
+      const dayV=Number((document.getElementById('f-day')||{}).value||0);
+      if(!dayV||dayV<1||dayV>31){toast('날짜를 1~31로 입력','#e07b54');return;}
+      s.dayOfMonth=dayV;delete s.weeklyDay;
+    }
+    saveDB();closeM();toast('✓ 일정 수정 완료',ACCS[S.acct].color);
+  } else if(S.mtype==='add-sched'){
+    const isW=document.getElementById('sched-weekly-inp')&&document.getElementById('sched-weekly-inp').style.display!=='none';
     const memo=(document.getElementById('f-memo')||{}).value||'';
-    DB.schedules.push({id:'u'+Date.now(),accountId:S.acct,type:S.stype,amount,label,dayOfMonth:dayV,active:true,memo});
+    if(isW){
+      if(_selWD==null){toast('요일을 선택해주세요','#e07b54');return;}
+      DB.schedules.push({id:'u'+Date.now(),accountId:S.acct,type:S.stype,amount,label,weeklyDay:_selWD,active:true,memo});
+    } else {
+      const dayV=Number((document.getElementById('f-day')||{}).value||0);
+      if(!dayV||dayV<1||dayV>31){toast('날짜를 1~31로 입력','#e07b54');return;}
+      DB.schedules.push({id:'u'+Date.now(),accountId:S.acct,type:S.stype,amount,label,dayOfMonth:dayV,active:true,memo});
+    }
     saveDB();closeM();toast('✓ 정기 일정 추가',ACCS[S.acct].color);
   }
   render();
@@ -911,7 +992,8 @@ function closeM(){document.getElementById('modal-bg').classList.remove('open');}
 // ═══ 액션 ═════════════════════════════════════════════════════════════════════
 function recSched(id){
   const s=(DB.schedules||[]).find(x=>x.id===id);if(!s)return;
-  const mk=mkey(S.vy,S.vm);const day=s.dayOfMonth===99?ld(S.vy,S.vm):s.dayOfMonth;
+  const mk=mkey(S.vy,S.vm);
+  const day=s.weeklyDay!=null?td:(s.dayOfMonth===99?ld(S.vy,S.vm):s.dayOfMonth);
   const tx={id:'t'+Date.now(),accountId:s.accountId,type:s.type,amount:s.amount,label:s.label,date:mk+'-'+pad(day),memo:s.memo||'',fromSched:s.id};
   if(s.linkedDebt){tx.linkedDebt=s.linkedDebt;const d=(DB.debts||[]).find(x=>x.id===s.linkedDebt);if(d)d.remaining=Math.max(0,d.remaining-s.amount);}
   if(s.linkedLoan){tx.linkedLoan=s.linkedLoan;const l=(DB.loans||[]).find(x=>x.id===s.linkedLoan);if(l)l.remaining=Math.max(0,l.remaining-s.amount);}
